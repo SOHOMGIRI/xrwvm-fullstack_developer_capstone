@@ -30,7 +30,12 @@ urlpatterns = [
         'path': 'logo512.png',
         'document_root': os.path.join(settings.BASE_DIR, 'frontend/build')
     }),
+]
 
-    # 🔹 Serve React frontend for all unmatched routes
-    re_path(r'^.*$', TemplateView.as_view(template_name="index.html")),
-] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# 🔹 Serve React frontend for all unmatched routes — EXCLUDE /admin
+urlpatterns += [
+    re_path(r'^(?!admin).*$', TemplateView.as_view(template_name="index.html")),
+]
+
+# 🔹 Serve static files
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

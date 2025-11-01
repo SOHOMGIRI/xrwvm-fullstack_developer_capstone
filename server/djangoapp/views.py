@@ -1,14 +1,18 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponseRedirect, HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.contrib.auth.models import User
 from django.contrib.auth import login, logout, authenticate
-from django.contrib import messages
-from datetime import datetime
 from django.views.decorators.csrf import csrf_exempt
 import logging
 import json
 
-# Get an instance of a logger
+# 🔹 Models for car data
+from .models import CarMake, CarModel
+
+# 🔹 Populate function to seed car data
+from .populate import initiate
+
+# 🔹 Logger setup
 logger = logging.getLogger(__name__)
 
 # 🔹 Login view to handle sign-in request
@@ -66,15 +70,17 @@ def registration(request):
             return JsonResponse({"error": "Registration failed"}, status=400)
     return JsonResponse({"error": "POST request required"}, status=400)
 
-# 🔹 Dealership views (to be implemented later)
-# def get_dealerships(request):
-#     ...
-
-# def get_dealer_reviews(request, dealer_id):
-#     ...
-
-# def get_dealer_details(request, dealer_id):
-#     ...
-
-# def add_review(request):
-#     ...
+# 🔹 Updated Get Cars view for CarMake and CarModel
+def get_cars(request):
+    count = CarModel.objects.count()  # ✅ Changed from CarMake to CarModel
+    print(f"CarModel count: {count}")
+    if count == 0:
+        initiate()
+    car_models = CarModel.objects.select_related('car_make')
+    cars = []
+    for car_model in car_models:
+        cars.append({
+            "CarModel": car_model.name,
+            "CarMake": car_model.car_make.name
+        })
+    return JsonResponse({"CarModels": cars})
