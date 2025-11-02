@@ -12,6 +12,9 @@ from .models import CarMake, CarModel
 # 🔹 Populate function to seed car data
 from .populate import initiate
 
+# 🔹 Proxy service functions
+from .restapis import get_request, post_review, analyze_review_sentiments
+
 # 🔹 Logger setup
 logger = logging.getLogger(__name__)
 
@@ -70,9 +73,9 @@ def registration(request):
             return JsonResponse({"error": "Registration failed"}, status=400)
     return JsonResponse({"error": "POST request required"}, status=400)
 
-# 🔹 Updated Get Cars view for CarMake and CarModel
+# 🔹 Get Cars view for CarMake and CarModel
 def get_cars(request):
-    count = CarModel.objects.count()  # ✅ Changed from CarMake to CarModel
+    count = CarModel.objects.count()
     print(f"CarModel count: {count}")
     if count == 0:
         initiate()
@@ -84,3 +87,80 @@ def get_cars(request):
             "CarMake": car_model.car_make.name
         })
     return JsonResponse({"CarModels": cars})
+
+# 🔹 Proxy: Fetch dealers from Express API
+def fetch_dealers(request):
+    dealers = get_request("/dealers")
+    return JsonResponse({"dealers": dealers})
+
+# 🔹 Proxy: Fetch reviews for a dealer
+def fetch_reviews(request, dealer_id):
+    reviews = get_request("/reviews", dealerId=str(dealer_id))
+    return JsonResponse({"reviews": reviews})
+
+# 🔹 Proxy: Submit a review to Express API
+@csrf_exempt
+def submit_review(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            result = post_review(data)
+            return JsonResponse(result)
+        except Exception as e:
+            logger.error(f"Review submission error: {e}")
+            return JsonResponse({"error": "Review submission failed"}, status=400)
+    return JsonResponse({"error": "POST request required"}, status=400)
+
+# 🔹 Proxy: Analyze sentiment of a review
+def analyze_review(request):
+    text = request.GET.get("text", "")
+    if not text:
+        return JsonResponse({"error": "Missing text"}, status=400)
+    sentiment = analyze_review_sentiments(text)
+    return JsonResponse({"sentiment": sentiment})
+
+# 🔹 Coursera: Get dealerships by state or all
+def get_dealerships(request, state="All"):
+    if state == "All":
+        endpoint = "/fetchDealers"
+    else:
+        endpoint = "/fetchDealers/" + state
+    dealerships = get_request(endpoint)
+    return JsonResponse({"status": 200, "dealers": dealerships})
+
+# 🔹 Coursera: Get dealer details by ID
+def get_dealer_details(request, dealer_id):
+    if dealer_id:
+        endpoint = "/fetchDealer/" + str(dealer_id)
+        dealership = get_request(endpoint)
+        return JsonResponse({"status": 200, "dealer": dealership})
+    else:
+        return JsonResponse({"status": 400, "message": "Bad Request"})
+
+# 🔹 Coursera: Get dealer reviews with sentiment
+def get_dealer_reviews(request, dealer_id):
+    if dealer_id:
+        endpoint = "/fetchReviews/dealer/" + str(dealer_id)
+        reviews = get_request(endpoint)
+        for review_detail in reviews:
+            response = analyze_review_sentiments(review_detail['review'])
+            print(response)
+            review_detail['sentiment'] = response['sentiment']
+        return JsonResponse({"status": 200, "reviews": reviews})
+    else:
+        return JsonResponse({"status": 400, "message": "Bad Request"})
+
+# 🔹 Coursera: Add a dealer review (only for authenticated users)
+@csrf_exempt
+def add_review(request):
+    if request.user.is_anonymous == False:
+        try:
+            data = json.loads(request.body)
+            response = post_review(data)
+            print(response)
+            return JsonResponse({"status": 200})
+        except Exception as e:
+            logger.error(f"Error posting review: {e}")
+            return JsonResponse({"status": 401, "message": "Error in posting review"})
+    else:
+        return JsonResponse({"status": 403, "message": "Unauthorized"})
